@@ -1,5 +1,8 @@
-# Use lightweight Python image
+k# Use lightweight Python image
 FROM python:3.10-slim
+
+# Install system dependencies (git + others)
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
 RUN useradd -m -u 1000 user
@@ -19,6 +22,6 @@ COPY --chown=user . /app
 # Expose Hugging Face default port
 EXPOSE 7860
 
-# Start FastAPI app
+# Run FastAPI app
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
 
