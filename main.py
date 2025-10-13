@@ -146,20 +146,34 @@ Keep it minimal but correct and fast.
     print(f"✅ repo created: {repo_url}")
 
     # 5) PUSH FILES TO GITHUB
-    with tempfile.TemporaryDirectory() as tmp:
-        subprocess.run(["git","clone",clone_url,tmp], check=True)
-        with open(os.path.join(tmp, "index.html"), "w", encoding="utf-8") as f:
-            f.write(html)
-        with open(os.path.join(tmp, "README.md"), "w", encoding="utf-8") as f:
-            f.write(f"# {repo_name}\n\nAuto-generated for **{task}** round **{round_num}**.\n\nBrief:\n\n```\n{brief}\n```")
-        with open(os.path.join(tmp, "LICENSE"), "w", encoding="utf-8") as f:
-            f.write("MIT License\n\nCopyright (c) 2025")
+    import subprocess, os, tempfile
 
-        subprocess.run(["git","-C",tmp,"add","."], check=True)
-        subprocess.run(["git","-C",tmp,"commit","-m","initial commit"], check=True)
-        subprocess.run(["git","-C",tmp,"push"], check=True)
-    print("📦 code pushed")
+with tempfile.TemporaryDirectory() as tmp:
+    # Clone the new GitHub repo
+    subprocess.run(["git", "clone", clone_url, tmp], check=True)
 
+    # Write files into the repo
+    with open(os.path.join(tmp, "index.html"), "w", encoding="utf-8") as f:
+        f.write(html)
+
+    with open(os.path.join(tmp, "README.md"), "w", encoding="utf-8") as f:
+        f.write(f"# {repo_name}\n\nAuto-generated for **{task}** round **{round_num}**.\n\nBrief:\n\n```\n{brief}\n```")
+
+    with open(os.path.join(tmp, "LICENSE"), "w", encoding="utf-8") as f:
+        f.write("MIT License\n\nCopyright (c) 2025")
+
+    # ✅ Always set git identity for this repo (fixes 'author identity unknown' error)
+    subprocess.run(["git", "-C", tmp, "config", "user.email", "23f2005020@ds.study.iitm.ac.in"], check=True)
+    subprocess.run(["git", "-C", tmp, "config", "user.name", "saksham-bansal-1"], check=True)
+
+    # Add and commit changes
+    subprocess.run(["git", "-C", tmp, "add", "."], check=True)
+    subprocess.run(["git", "-C", tmp, "commit", "-m", "initial commit"], check=True)
+
+    # Push code to GitHub
+    subprocess.run(["git", "-C", tmp, "push"], check=True)
+
+print("📦 code pushed")
     # 6) ENABLE GITHUB PAGES
     enable_github_pages(repo_name)
 
