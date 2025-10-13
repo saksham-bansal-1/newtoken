@@ -1,4 +1,4 @@
-k# Use lightweight Python image
+# Use lightweight Python image
 FROM python:3.10-slim
 
 # Install system dependencies (git + others)
