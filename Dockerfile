@@ -1,8 +1,10 @@
 # Use lightweight Python image
 FROM python:3.10-slim
 
-# Install system dependencies (git + others)
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+# Install Git and set user info
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/* \
+    && git config --global user.email "23f2005020@ds.study.iitm.ac.in" \
+    && git.config --global user.name "saksham-bansal-1"
 
 # Create non-root user
 RUN useradd -m -u 1000 user
