@@ -1,0 +1,38 @@
+# --- Environment & Secrets ---
+.env
+.env.*
+!.env.example   # allow the example version to be committed (no secrets)
+
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+*.db
+*.log
+
+# --- Virtual Environments ---
+venv/
+env/
+ENV/
+.venv/
+
+# --- macOS junk files ---
+.DS_Store
+.Trashes
+.AppleDouble
+.LSOverride
+
+# --- Editors / IDEs ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Temporary directories ---
+tmp/
+temp/
+*.bak
+*.tmp
+
