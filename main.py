@@ -8,19 +8,26 @@ from openai import OpenAI
 from pydantic import BaseModel
 
 # ==============================
+#  CONFIGURE LOGGING (console + file)
+# ==============================
+logging.basicConfig(
+    filename="logs.txt",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+console.setFormatter(formatter)
+logging.getLogger("").addHandler(console)
+logging.info("🚀 Application starting...")
+
+# ==============================
 #  LOAD ENVIRONMENT VARIABLES
 # ==============================
 load_dotenv()
 
 app = FastAPI(title="LLM Code Deployment")
-
-# ---- LOGGING SETUP ----
-logging.basicConfig(
-    filename="logs.txt",
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
-logging.info("🚀 Server started and logging initialized.")
 
 # ---- ENVIRONMENT ----
 GITHUB_TOKEN   = os.getenv("GITHUB_TOKEN")
@@ -39,9 +46,9 @@ REQUIRED_ENV = {
 }
 missing = [k for k, v in REQUIRED_ENV.items() if not v]
 if missing:
-    logging.warning(f"⚠️ Missing required env vars: {missing} (check your .env file)")
+    logging.warning(f"⚠️ Missing required env vars: {missing} (check your .env or HF secrets)")
 else:
-    logging.info("✅ Environment variables loaded successfully.")
+    logging.info("✅ All environment variables loaded successfully")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -82,12 +89,7 @@ def notify_evaluator(payload: Dict[str, Any], evaluation_url: str) -> None:
     delay = 1
     for attempt in range(5):
         try:
-            resp = requests.post(
-                evaluation_url,
-                json=payload,
-                headers={"Content-Type": "application/json"},
-                timeout=10
-            )
+            resp = requests.post(evaluation_url, json=payload, headers={"Content-Type": "application/json"}, timeout=10)
             logging.info(f"📤 Notify attempt {attempt + 1}: {resp.status_code}")
             if resp.status_code == 200:
                 return
@@ -101,16 +103,17 @@ def notify_evaluator(payload: Dict[str, Any], evaluation_url: str) -> None:
 # ==============================
 @app.get("/")
 def root():
+    logging.info("✅ GET / - Health check OK")
     return {"ok": True, "message": "LLM Deployment API is live"}
 
 @app.post("/api-endpoint")
 async def api_endpoint(data: TaskRequest):
     data = data.dict()
-    logging.info(f"📥 Received request: {data}")
+    logging.info(f"📥 Received API request: {data}")
 
     # 1️⃣ AUTHENTICATION
     if data.get("secret") != STUDENT_SECRET:
-        logging.warning("Invalid secret received.")
+        logging.warning("❌ Invalid secret provided.")
         return JSONResponse({"error": "Invalid secret"}, status_code=403)
 
     # 2️⃣ BASIC VALIDATION
@@ -122,10 +125,10 @@ async def api_endpoint(data: TaskRequest):
     evaluation_url = data.get("evaluation_url") or EVALUATION_URL_DEFAULT
 
     if not email or email.lower() != ALLOWED_EMAIL.lower():
-        logging.error(f"Invalid email received: {email}")
+        logging.warning(f"❌ Invalid email: {email}")
         return JSONResponse({"error": f"Invalid email. Expected {ALLOWED_EMAIL}."}, status_code=400)
     if not task:
-        logging.error("Missing task in request.")
+        logging.warning("❌ Missing 'task'.")
         return JSONResponse({"error": "Missing 'task'."}, status_code=400)
 
     repo_name = f"{task}-round{round_num}"
@@ -142,9 +145,8 @@ BRIEF:
 HARD REQUIREMENTS:
 - One file only: inline CSS & JS inside <style> and <script>.
 - No markdown, no explanations — return pure HTML only.
-- Add <meta name="viewport">, and a useful <title>.
-- Include an element with id="app-status" to reflect load status.
-- Keep it minimal but correct.
+- Add <meta name="viewport"> and a <title>.
+- Include an element with id="app-status" to show load status.
 """
     try:
         resp = client.chat.completions.create(
@@ -154,20 +156,16 @@ HARD REQUIREMENTS:
         )
         raw = resp.choices[0].message.content
         html = clean_llm_html(raw)
-        logging.info("✅ HTML generated successfully.")
+        logging.info("✅ OpenAI HTML generated successfully.")
     except Exception as e:
-        logging.exception("❌ OpenAI generation failed.")
+        logging.error(f"OpenAI generation failed: {e}")
         return JSONResponse({"error": f"OpenAI generation failed: {str(e)}"}, status_code=500)
 
     # 4️⃣ DETERMINE IF NEW OR UPDATE
-    existing_repo = requests.get(
-        f"https://api.github.com/repos/{GITHUB_OWNER}/{repo_name}", headers=gh_headers()
-    )
+    existing_repo = requests.get(f"https://api.github.com/repos/{GITHUB_OWNER}/{repo_name}", headers=gh_headers())
     is_update = existing_repo.status_code == 200
 
     if not is_update:
-        # 🆕 Round 1: Create new repo
-        logging.info("🆕 Creating new GitHub repo...")
         r = requests.post(
             "https://api.github.com/user/repos",
             headers=gh_headers(),
@@ -179,12 +177,11 @@ HARD REQUIREMENTS:
         repo_json = r.json()
         repo_url = repo_json["html_url"]
         clone_url = repo_json["clone_url"]
-        logging.info(f"✅ Repo created: {repo_url}")
+        logging.info(f"✅ repo created: {repo_url}")
     else:
-        # ⚙️ Round N: Update existing repo
-        logging.info(f"⚙️ Round {round_num}: updating existing repo")
         repo_url = existing_repo.json()["html_url"]
         clone_url = existing_repo.json()["clone_url"]
+        logging.info(f"⚙️ Round {round_num}: updating existing repo {repo_url}")
 
     # 5️⃣ CLONE, WRITE FILES, COMMIT, PUSH
     try:
@@ -192,8 +189,8 @@ HARD REQUIREMENTS:
             authed_clone_url = clone_url.replace("https://", f"https://{GITHUB_TOKEN}@")
             subprocess.run(["git", "clone", authed_clone_url, tmp], check=True)
 
-            subprocess.run(["git", "-C", tmp, "config", "user.email", ALLOWED_EMAIL], check=True)
-            subprocess.run(["git", "-C", tmp, "config", "user.name", GITHUB_OWNER], check=True)
+            subprocess.run(["git", "-C", tmp, "config", "user.email", "23f2005020@ds.study.iitm.ac.in"], check=True)
+            subprocess.run(["git", "-C", tmp, "config", "user.name", "saksham-bansal-1"], check=True)
 
             with open(os.path.join(tmp, "index.html"), "w", encoding="utf-8") as f:
                 f.write(html)
@@ -207,10 +204,10 @@ HARD REQUIREMENTS:
             subprocess.run(["git", "-C", tmp, "commit", "-m", commit_msg], check=True)
             subprocess.run(["git", "-C", tmp, "push"], check=True)
 
-        logging.info("📦 Code pushed successfully.")
+        logging.info("📦 code pushed successfully.")
     except subprocess.CalledProcessError as e:
-        logging.exception(f"❌ Git operation failed: {e}")
-        return JSONResponse({"error": "Git push failed"}, status_code=500)
+        logging.error(f"Git error: {e}")
+        return JSONResponse({"error": f"Git error: {e}"}, status_code=500)
 
     # 6️⃣ ENABLE GITHUB PAGES
     enable_github_pages(repo_name)
@@ -227,7 +224,7 @@ HARD REQUIREMENTS:
     }
     notify_evaluator(payload, evaluation_url)
 
-    logging.info(f"✅ Process complete for repo {repo_name}")
+    logging.info(f"✅ Completed build for {repo_name}")
     return JSONResponse({"status": "success", "repo_url": repo_url, "pages_url": pages_url})
 
 # ==============================
@@ -236,6 +233,6 @@ HARD REQUIREMENTS:
 @app.post("/evaluation")
 async def evaluation(req: Request):
     data = await req.json()
-    logging.info(f"🧪 Evaluator received: {json.dumps(data, indent=2)}")
+    logging.info(f"🧪 evaluator received: {json.dumps(data, indent=2)}")
     return {"ok": True, "received": data}
 
