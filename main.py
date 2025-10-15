@@ -164,9 +164,11 @@ HARD REQUIREMENTS:
 
     # 5️⃣ CLONE, WRITE FILES, COMMIT, PUSH
     with tempfile.TemporaryDirectory() as tmp:
-        subprocess.run(["git", "clone", clone_url, tmp], check=True)
+        # ✅ Use token-authenticated URL for clone & push
+        authed_clone_url = clone_url.replace("https://", f"https://{GITHUB_TOKEN}@")
+        subprocess.run(["git", "clone", authed_clone_url, tmp], check=True)
 
-        # Configure git identity (fixes 'Author identity unknown')
+        # Configure git identity
         subprocess.run(["git", "-C", tmp, "config", "user.email", "23f2005020@ds.study.iitm.ac.in"], check=True)
         subprocess.run(["git", "-C", tmp, "config", "user.name", "saksham-bansal-1"], check=True)
 
